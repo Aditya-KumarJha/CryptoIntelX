@@ -19,7 +19,7 @@ const sendEmail = async (to, text, subject = "CryptoIntelX Notification", html =
   const msg = {
     to,
     from: {
-      email: process.env.SENDGRID_FROM_EMAIL || 'CryptoIntelXowns@gmail.com',
+      email: process.env.SENDGRID_FROM_EMAIL,
       name: 'CryptoIntelX'
     },
     subject,
