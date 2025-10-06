@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+  "recharts": "^2.13.3",
     "@ant-design/icons": "^6.0.0",
     "@radix-ui/react-slot": "^1.2.3",
     "@splinetool/react-spline": "^4.1.0",
