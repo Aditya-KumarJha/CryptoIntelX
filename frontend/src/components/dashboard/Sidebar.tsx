@@ -41,6 +41,7 @@ export default function Sidebar() {
     if (!pathname) return "dashboard"; 
     if (pathname.startsWith("/dashboard/search")) return "search";
     if (pathname.startsWith("/dashboard/network")) return "network";
+    if (pathname.startsWith("/dashboard/address-scanner")) return "address-scanner";
     if (pathname.startsWith("/dashboard/threat")) return "threat";
     if (pathname.startsWith("/dashboard/ai")) return "ai";
     if (pathname.startsWith("/dashboard/alerts")) return "alerts";
@@ -54,9 +55,10 @@ export default function Sidebar() {
   };
 
   const menuItems = [
-    { key: "dashboard", icon: LayoutDashboard, label: "Intelligence Hub", path: "/dashboard" },
-    { key: "search", icon: Search, label: "Address Search", path: "/dashboard/search" },
+    { key: "dashboard", icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+    { key: "search", icon: Search, label: "Search & Analysis", path: "/dashboard/search" },
     { key: "network", icon: Network, label: "Network Analysis", path: "/dashboard/network" },
+    { key: "address-scanner", icon: Radar, label: "Address Scanner", path: "/dashboard/address-scanner" },
     { key: "threat", icon: Shield, label: "Threat Detection", path: "/dashboard/threat" },
     { key: "ai", icon: Brain, label: "AI Co-Pilot", path: "/dashboard/ai" },
     { key: "alerts", icon: AlertTriangle, label: "Alert Center", path: "/dashboard/alerts" },

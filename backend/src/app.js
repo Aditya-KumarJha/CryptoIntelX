@@ -38,6 +38,12 @@ app.use('/api/users', userRoutes);
 const networkRoutes = require('./routes/networkRoutes');
 app.use('/api/network', networkRoutes);
 
+const workerRoutes = require('./routes/workerRoutes');
+app.use('/workers', workerRoutes);
+
+const schedulerRoutes = require('./routes/schedulerRoutes');
+app.use('/api/scheduler', schedulerRoutes);
+
 app.get('/', (req, res) => res.send('API is running'));
 
 app.use((err, req, res, next) => {
