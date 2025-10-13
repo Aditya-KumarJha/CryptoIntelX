@@ -33,12 +33,14 @@ class Scheduler {
     console.log('Scheduler stopped');
   }
 
-  async runPaginatedScrape() {
+  async runPaginatedScrape(isManualScan = false) {
+    console.log('🚀 Starting runPaginatedScrape...', isManualScan ? '(Manual scan - real data only)' : '(Scheduled run)');
     const seeds = ['CryptoCurrency', 'Bitcoin', 'ethtrader', 'Monero', 'Scams', 'cryptodevs'];
     const results = {};
     
     // Import Feed model for pagination tracking
     const Feed = require('../models/feedsModel');
+    console.log('📊 Processing', seeds.length, 'subreddits:', seeds.join(', '));
     
     for (const sub of seeds) {
       try {
@@ -53,7 +55,8 @@ class Scheduler {
           mode: 'new', 
           limit: 25, 
           fetchComments: true,
-          pageAfter: pageAfter  // Use stored pagination token
+          pageAfter: pageAfter,  // Use stored pagination token
+          isManualScan: isManualScan  // Pass manual scan flag
         });
         results[sub] = result;
         
@@ -63,6 +66,7 @@ class Scheduler {
         await new Promise(r => setTimeout(r, 2000));
       } catch (e) {
         console.error(`Failed to scrape ${sub}:`, e.message);
+        console.error(`Full error for ${sub}:`, e);
         results[sub] = { error: e.message };
       }
     }
