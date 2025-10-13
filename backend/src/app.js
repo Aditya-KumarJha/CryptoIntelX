@@ -7,6 +7,8 @@ const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 
+const path = require('path');
+
 const allowedOrigins = [
   process.env.CLIENT_URL,
   process.env.VERCEL_CLIENT_URL,
@@ -37,6 +39,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 const networkRoutes = require('./routes/networkRoutes');
 app.use('/api/network', networkRoutes);
+const caseRoutes = require('./routes/caseRoutes');
+app.use('/api/cases', caseRoutes);
+
+// serve generated exports (PDFs)
+app.use('/exports', express.static(path.resolve(__dirname, '..', 'exports')));
 
 const workerRoutes = require('./routes/workerRoutes');
 app.use('/workers', workerRoutes);

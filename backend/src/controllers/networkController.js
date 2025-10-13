@@ -2,10 +2,10 @@ const networkService = require('../services/networkService');
 
 const expand = async (req, res) => {
   try {
-    const { address, limit = 200, minRisk = 0 } = req.body;
+  const { address, limit = 200, minRisk = 0, depth = 1 } = req.body;
     if (!address) return res.status(400).json({ message: 'address is required' });
 
-    const data = await networkService.expandNeighbors({ address, limit: parseInt(limit, 10), minRisk: parseFloat(minRisk) });
+  const data = await networkService.expandNeighbors({ address, limit: parseInt(limit, 10), minRisk: parseFloat(minRisk), depth: parseInt(depth, 10) });
     res.status(200).json({ success: true, ...data });
   } catch (err) {
     console.error('Network expand error:', err);
