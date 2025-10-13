@@ -3,7 +3,14 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import api from '@/utils/axios';
 import { Search, Network, Maximize } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import ForceGraph2D from 'react-force-graph-2d';
+import dynamic from 'next/dynamic'; 
+import * as THREE from 'three';
+
+const ForceGraph3D = dynamic(
+  () => import('react-force-graph-3d'),
+  { ssr: false, loading: () => <div className="text-gray-400 p-4">Loading 3D Graph...</div> }
+);
+
 
 function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
   ctx.beginPath();
@@ -16,6 +23,67 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width:
   ctx.fill();
 }
 
+const linkColor = (link: any) => link.tx_count > 50 ? '#ff0000' : '#00FFFF';
+
+
+const nodeThreeObjectCallback = (node: any) => {
+    const group = new THREE.Group();
+
+    const color = node.risk_score >= 75 
+        ? 0xef4444 
+        : node.risk_score >= 40 
+            ? 0xfbbf24 
+            : 0x34d399;
+    
+    // 🛑 FIX: Increased base radius (4 -> 8) and adjusted risk scaling (8 -> 4) for bigger nodes.
+    const radius = 8 + (node.risk_score || 0) / 4;
+    
+    const geometry = new THREE.SphereGeometry(radius, 16, 16);
+    const material = new THREE.MeshPhongMaterial({ color: color, transparent: true, opacity: 0.9 }); 
+    const sphere = new THREE.Mesh(geometry, material);
+    group.add(sphere);
+
+    const full = String(node.address || '');
+    const labelText = full.length > 10 ? full.slice(0, 4) + '…' + full.slice(-4) : full;
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    
+    if (context) {
+        const fontSize = 32; 
+        const padding = 6;
+        context.font = `Bold ${fontSize}px Arial`;
+        const metrics = context.measureText(labelText);
+        const textWidth = metrics.width;
+
+        canvas.width = textWidth + 2 * padding;
+        canvas.height = fontSize + 2 * padding;
+
+        context.font = `Bold ${fontSize}px Arial`;
+        context.fillStyle = 'rgba(0, 0, 0, 0.7)'; 
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = 'white';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(labelText, canvas.width / 2, canvas.height / 2);
+
+        const map = new THREE.CanvasTexture(canvas);
+        const spriteMaterial = new THREE.SpriteMaterial({ map: map, transparent: true, depthTest: false });
+        const sprite = new THREE.Sprite(spriteMaterial);
+
+        const scaleFactor = 0.4;
+        sprite.scale.set(canvas.width * scaleFactor, canvas.height * scaleFactor, 1);
+        
+        // Label position scales with the new, larger radius
+        sprite.position.y += radius * 0.8; 
+        group.add(sprite);
+        
+        map.dispose();
+    }
+    
+    return group;
+  };
+
+
 export default function NetworkAnalysis() {
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,7 +92,7 @@ export default function NetworkAnalysis() {
   const [error, setError] = useState<string | null>(null);
 
   const [depth, setDepth] = useState(1);
-  const fgRef = useRef<any>(null);
+  const fgRef = useRef<any>(null); 
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const [graphDimensions, setGraphDimensions] = useState({ width: 0, height: 0 });
 
@@ -48,43 +116,40 @@ export default function NetworkAnalysis() {
     return () => window.removeEventListener('resize', updateGraphDimensions);
   }, [updateGraphDimensions]);
   
-  // FIX: Apply D3 forces and zoom using only d3Force and d3ReheatSimulation
   useEffect(() => {
     if (fgRef.current && graphData.nodes.length > 0) {
       
-      // Configure D3 Forces using the ref object's d3Force method
-      const linkForce = fgRef.current.d3Force('link');
-      if (linkForce) {
-        linkForce
-          .distance((link: any) => 60)
-          .strength((link: any) => 0.9);
-      }
-
-      const chargeForce = fgRef.current.d3Force('charge');
-      if (chargeForce) {
-        chargeForce
-          .strength(-250)
-          .distanceMax(300);
-      }
-
-      const centerForce = fgRef.current.d3Force('center');
-      if (centerForce) {
-        centerForce.strength(0.1); 
-      }
-      
-      // Reheat the simulation to apply forces immediately
-      fgRef.current.d3ReheatSimulation();
-
-      // Zoom to Fit after forces are set (waits for a tick)
       setTimeout(() => {
-        fgRef.current.zoomToFit(400);
+        const linkForce = fgRef.current.d3Force('link');
+        
+        if (linkForce) {
+          linkForce
+            .distance((link: any) => 160)
+            .strength((link: any) => 0.9);
+
+          const chargeForce = fgRef.current.d3Force('charge');
+          if (chargeForce) {
+            chargeForce
+              .strength(-500)
+              .distanceMax(300);
+          }
+
+          const centerForce = fgRef.current.d3Force('center');
+          if (centerForce) {
+            centerForce.strength(0.1); 
+          }
+          
+          fgRef.current.d3ReheatSimulation();
+
+          fgRef.current.cameraPosition({ z: 200 }, null, 400); 
+        }
       }, 50); 
     }
   }, [graphData]);
 
   const handleZoomToFit = () => {
     if (fgRef.current) {
-      fgRef.current.zoomToFit(400);
+      fgRef.current.zoomToFit(400); 
     }
   };
 
@@ -113,6 +178,14 @@ export default function NetworkAnalysis() {
   };
 
   const handleNodeClick = async (node: any) => {
+    if (fgRef.current) {
+        fgRef.current.cameraPosition(
+            { x: node.x, y: node.y, z: node.z + 100 },
+            node, 
+            1000 
+        );
+    }
+    
     try {
       const token = localStorage.getItem('authToken');
       const res = await api.get(`/api/network/summary/${encodeURIComponent(node.address)}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -163,55 +236,9 @@ export default function NetworkAnalysis() {
       setExporting(false);
       const filePath = res?.data?.data?.file_path;
       if (filePath) {
-        // Try to fetch the file and trigger an automatic download with a sensible filename.
         toast.success('Export ready! Downloading file. 💾');
-        try {
-          let url: string;
-          if (filePath.startsWith('http')) {
-            url = filePath;
-          } else {
-            // Prefer axios baseURL (backend URL) when the server returns a relative path like '/exports/...'
-            const apiBase = (api && (api.defaults && api.defaults.baseURL)) || process.env.NEXT_PUBLIC_API_URL || window.location.origin;
-            try {
-              // new URL(relative, base) will handle joining even if base has a trailing slash
-              url = new URL(filePath, apiBase).toString();
-            } catch (e) {
-              // Fallback to front-end origin if something unexpected occurs
-              url = `${window.location.origin}${filePath}`;
-            }
-          }
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`Failed to fetch file: ${response.status}`);
-          const blob = await response.blob();
-
-          // Try to parse a filename from Content-Disposition header, otherwise fall back to the URL path
-          let filename = 'export.pdf';
-          const cd = response.headers.get('content-disposition');
-          if (cd) {
-            const match = cd.match(/filename\*=UTF-8''([^;\n]+)|filename="?([^";]+)"?/);
-            if (match) filename = decodeURIComponent(match[1] || match[2] || filename);
-          } else {
-            const parts = url.split('/');
-            if (parts.length > 0) filename = parts[parts.length - 1] || filename;
-          }
-
-          const blobUrl = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = filename;
-          // Append for Firefox
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          // Release memory
-          setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
-        } catch (downloadErr) {
-          console.error('Automatic download failed, falling back to opening the file:', downloadErr);
-          // Fallback: open the file in a new tab so the user can manually save it
-          const openUrl = filePath.startsWith('http') ? filePath : `${window.location.origin}${filePath}`;
-          window.open(openUrl, '_blank');
-          toast('Could not download automatically; opened file in a new tab.', { icon: '📄' });
-        }
+        if (filePath.startsWith('http')) window.open(filePath, '_blank');
+        else toast('Could not download automatically; opened file in a new tab.', { icon: '📄' });
       } else {
         toast.success('Export ready (server returned no file path)');
       }
@@ -220,29 +247,6 @@ export default function NetworkAnalysis() {
       setExporting(false);
       toast.error('Failed to export');
     }
-  };
-
-  const nodeCanvasObject = (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    const full = String(node.address || '');
-    const label = full.length > 10 ? full.slice(0, 4) + '…' + full.slice(-4) : full;
-    const fontSize = Math.max(8, 10 / globalScale);
-    
-    const radius = 8 + (node.risk_score || 0) / 10;
-    
-    ctx.beginPath();
-    ctx.fillStyle = node.risk_score >= 75 ? '#ef4444' : node.risk_score >= 40 ? '#fbbf24' : '#34d399';
-    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
-    ctx.fill();
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.lineWidth = 1.5 / globalScale;
-    ctx.stroke();
-
-    ctx.font = `${fontSize}px Inter, Sans-Serif`;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, node.x, node.y + radius + 7 + (fontSize / 2));
   };
 
 
@@ -309,7 +313,7 @@ export default function NetworkAnalysis() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
-          <div ref={graphContainerRef} className="h-[40rem] rounded-xl relative overflow-hidden" style={{ background: 'linear-gradient(180deg, rgba(15,23,42,0.5), rgba(58,12,141,0.25))', border: '1px solid rgba(255,255,255,0.03)' }}>
+          <div ref={graphContainerRef} className="h-[25rem] rounded-xl relative overflow-hidden" style={{ background: 'linear-gradient(180deg, rgba(15,23,42,0.5), rgba(58,12,141,0.25))', border: '1px solid rgba(255,255,255,0.03)' }}>
             {nodes.length === 0 ? (
               <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 p-8">
                 <div className="w-36 h-36 rounded-full bg-gradient-to-br from-purple-700/30 to-indigo-700/30 flex items-center justify-center mb-4 shadow-inner">
@@ -322,30 +326,27 @@ export default function NetworkAnalysis() {
               </div>
             ) : (
               <div className="w-full h-full"> 
-                <ForceGraph2D
+                <ForceGraph3D
                   ref={fgRef}
                   graphData={graphData}
                   width={graphDimensions.width}
                   height={graphDimensions.height}
+                  showNavInfo={true} 
+                  
                   nodeLabel={(node: any) => `${node.address}\nRisk: ${node.risk_score ?? 0}`}
                   nodeAutoColorBy={(node: any) => (node.risk_score >= 75 ? 'high' : node.risk_score >= 40 ? 'medium' : 'low')}
-                  nodeCanvasObject={nodeCanvasObject}
-                  
-                  nodePointerAreaPaint={(node: any, color: string, ctx: CanvasRenderingContext2D) => {
-                    ctx.fillStyle = color;
-                    ctx.beginPath();
-                    ctx.arc(node.x, node.y, 18, 0, 2 * Math.PI, false);
-                    ctx.fill();
-                  }}
+                  nodeResolution={16} 
+                  nodeThreeObject={nodeThreeObjectCallback} 
+                  nodeThreeObjectExtend={false} 
                   
                   linkDirectionalArrowLength={6}
                   linkDirectionalArrowRelPos={1}
                   linkDirectionalParticles={0}
-                  linkWidth={(link: any) => Math.max(0.8, (link.tx_count || 0) / 10)}
-                  linkColor={() => 'rgba(255,255,255,0.15)'}
+                  linkWidth={(link: any) => Math.max(1.5, (link.tx_count || 0) / 10)}
+                  linkColor={linkColor} 
                   
                   onLinkHover={(link: any) => setHoveredLink(link || null)}
-                  onNodeClick={(node: any) => handleNodeClick(node)}
+                  onNodeClick={handleNodeClick} 
                   onNodeHover={(node: any) => setHoveredNode(node || null)}
                   onBackgroundClick={() => { setHoveredNode(null); setHoveredLink(null); }}
                 />
@@ -357,7 +358,7 @@ export default function NetworkAnalysis() {
         <div>
           <div className="bg-gray-900/40 rounded-xl p-4 sticky top-4"> 
             <h4 className="font-semibold mb-2 text-lg text-white border-b border-gray-700/50 pb-2">Investigation Summary</h4>
-            <div className="text-sm text-gray-300 mt-2">Initial Address: <span className="font-semibold text-white">{address.slice(0, 10)}...{address.length > 0 ? address.slice(-8) : 'N/A'}</span></div>
+            <div className="text-sm text-gray-300 mt-2">Initial Address: <span className="font-semibold text-white">{address.slice(0, 10)}...{address.slice(-8)}</span></div>
             <div className="text-sm text-gray-300">Total Nodes: <span className="font-semibold text-white">{nodes.length}</span></div>
             <div className="text-sm text-gray-300">Total Edges: <span className="font-semibold text-white">{edges.length}</span></div>
             <div className="text-sm text-gray-300">Exploration Depth: <span className="font-semibold text-white">{depth}-hop</span></div>
@@ -373,7 +374,7 @@ export default function NetworkAnalysis() {
               <button 
                 onClick={handleExport} 
                 disabled={exporting || nodes.length === 0} 
-                className={`w-full text-sm px-4 py-3 rounded-xl border font-semibold transition duration-150 ${exporting || nodes.length === 0 ? 'bg-gray-700/30 text-gray-400 cursor-not-allowed border-gray-700/30' : 'border-gray-700/40 text-gray-200 hover:bg-gray-800/50'}`}
+                className={`w-full text-sm px-4 py-3 rounded-xl border ${exporting || nodes.length === 0 ? 'bg-gray-700/30 text-gray-400 cursor-not-allowed border-gray-700/30' : 'border-gray-700/40 text-gray-200 hover:bg-gray-800/50'}`}
               >
                 {exporting ? 'Exporting...' : 'Export All Data'}
               </button>
@@ -391,30 +392,13 @@ export default function NetworkAnalysis() {
         </div>
       </div>
 
-      {hoveredNode && graphContainerRef.current && (
-        <div 
-          className="absolute z-20 pointer-events-none transition-opacity duration-200"
-          style={{ 
-            left: `${(hoveredNode.x / fgRef.current.getScale() + fgRef.current.getTranslate().x) + graphContainerRef.current.offsetLeft + 20}px`,
-            top: `${(hoveredNode.y / fgRef.current.getScale() + fgRef.current.getTranslate().y) + graphContainerRef.current.offsetTop - 50}px`,
-            opacity: 1 
-          }}
-        >
-          <div className="bg-black/85 text-white p-3 rounded-lg max-w-xs shadow-xl border border-white/10">
-            <div className="font-semibold truncate">{hoveredNode.address}</div>
-            <div className="text-xs text-gray-300 mt-1">Type: <span className="font-medium text-cyan-300">{hoveredNode.type}</span></div>
-            <div className="text-xs text-gray-300">Risk Score: <span className="font-medium">{hoveredNode.risk_score ?? 'N/A'}</span></div>
-          </div>
-        </div>
-      )}
-
       {hoveredLink && (
         <div className="fixed left-1/2 top-[5rem] transform -translate-x-1/2 z-30 pointer-events-none">
           <div className="bg-black/90 text-white p-3 rounded-lg shadow-2xl text-sm border border-white/20">
             <div className="font-bold text-center mb-1">{hoveredLink.relation || 'Transaction'}</div>
             <div className="flex items-center space-x-4">
-              <div className="text-xs text-gray-300">From: <span className="font-mono text-xs text-teal-300">{String(hoveredLink.source).slice(0, 8)}...</span></div>
-              <div className="text-xs text-gray-300">To: <span className="font-mono text-xs text-teal-300">{String(hoveredLink.target).slice(0, 8)}...</span></div>
+              <div className="text-xs text-gray-300">From: <span className="font-mono text-xs text-teal-300">{String(hoveredLink.source).slice(0, 6)}...</span></div>
+              <div className="text-xs text-gray-300">To: <span className="font-mono text-xs text-teal-300">{String(hoveredLink.target).slice(0, 6)}...</span></div>
             </div>
             <div className="text-xs text-gray-300 mt-1 text-center">Tx Count: <span className="font-medium text-lg text-yellow-400">{hoveredLink.tx_count}</span></div>
           </div>
