@@ -51,6 +51,9 @@ app.use('/workers', workerRoutes);
 const schedulerRoutes = require('./routes/schedulerRoutes');
 app.use('/api/scheduler', schedulerRoutes);
 
+const threatRoutes = require('./routes/threatRoutes');
+app.use('/api/threat', threatRoutes);
+
 app.get('/', (req, res) => res.send('API is running'));
 
 app.use((err, req, res, next) => {

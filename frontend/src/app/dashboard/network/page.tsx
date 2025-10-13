@@ -2,7 +2,11 @@
 import React from 'react';
 import Sidebar from '@/components/dashboard/Sidebar';
 import { SidebarProvider, useSidebar } from '@/contexts/SidebarContext';
-import NetworkAnalysis from '@/components/dashboard/NetworkAnalysis';
+import dynamic from 'next/dynamic';
+
+const NetworkAnalysis = dynamic(() => import('@/components/dashboard/NetworkAnalysis'), {
+  ssr: false,
+});
 
 function NetworkContent() {
   const { collapsed } = useSidebar();
