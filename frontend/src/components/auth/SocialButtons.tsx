@@ -11,7 +11,7 @@ export default function SocialButtons({ onClick }: SocialButtonsProps) {
     { name: "Google", icon: <FaGoogle /> },
     { name: "GitHub", icon: <FaGithub /> },
     { name: "Facebook", icon: <FaFacebook /> },
-    { name: "Discord", icon: <FaDiscord /> },
+    { name: "LinkedIn", icon: <FaLinkedin /> },
   ];
 
   return (
