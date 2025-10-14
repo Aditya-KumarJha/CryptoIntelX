@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const crypto = require('crypto');
 const AbortController = global.AbortController || require('abort-controller');
 
-async function fetchRedditSubreddit(subreddit, mode='new', limit=25, pageAfter=null, userAgent='CryptoIntelX/1.0.0 (crypto-analysis-bot; +https://cryptointelx.com)'){
+async function fetchRedditSubreddit(subreddit, mode='new', limit=25, pageAfter=null, userAgent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'){
   const afterPart = pageAfter ? `&after=${pageAfter}` : '';
   const url = `https://www.reddit.com/r/${subreddit}/${mode}.json?limit=${limit}${afterPart}`;
   // retry/backoff for 429/5xx
@@ -12,7 +12,21 @@ async function fetchRedditSubreddit(subreddit, mode='new', limit=25, pageAfter=n
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     try{
-      const resp = await fetch(url, { headers: { 'User-Agent': userAgent, 'Accept': 'application/json' }, signal: controller.signal });
+      const resp = await fetch(url, { 
+        headers: { 
+          'User-Agent': userAgent, 
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Referer': `https://www.reddit.com/r/${subreddit}/`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        }, 
+        signal: controller.signal 
+      });
       const text = await resp.text();
       const sha256 = crypto.createHash('sha256').update(text).digest('hex');
       let json = null;
@@ -36,7 +50,7 @@ async function fetchRedditSubreddit(subreddit, mode='new', limit=25, pageAfter=n
   }
 }
 
-async function fetchRedditComments(subreddit, postId, userAgent='CryptoIntelX/1.0.0 (crypto-analysis-bot; +https://cryptointelx.com)'){
+async function fetchRedditComments(subreddit, postId, userAgent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'){
   const url = `https://www.reddit.com/r/${subreddit}/comments/${postId}.json?limit=500`;
   let backoff = 1000;
   for (let attempt=0; attempt<4; attempt++){
@@ -45,13 +59,20 @@ async function fetchRedditComments(subreddit, postId, userAgent='CryptoIntelX/1.
     try{
       const resp = await fetch(url, { 
         headers: { 
-          'User-Agent': userAgent, 
-          'Accept': 'application/json',
+          'User-Agent': userAgent,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
           'Accept-Encoding': 'gzip, deflate, br',
           'DNT': '1',
           'Connection': 'keep-alive',
           'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+          'Referer': `https://www.reddit.com/r/${subreddit}/`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
         }, 
         signal: controller.signal 
       });

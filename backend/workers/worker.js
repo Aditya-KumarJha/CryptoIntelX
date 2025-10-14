@@ -155,7 +155,7 @@ async function processSingleRedditPost(postId, subreddit) {
     // Use the proper Reddit connector with retry logic and better headers
     console.log(`Fetching post and comments: ${postId} from r/${subreddit}`);
     
-    const redditResponse = await fetchRedditComments(subreddit, postId, 'CryptoIntelX/1.0.0 (crypto-analysis-bot; +https://cryptointelx.com)');
+    const redditResponse = await fetchRedditComments(subreddit, postId, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
     if (redditResponse.status !== 200) {
       throw new Error(`Reddit API error: ${redditResponse.status}`);
