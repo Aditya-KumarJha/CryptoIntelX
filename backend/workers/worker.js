@@ -143,19 +143,29 @@ async function processSingleRedditPost(postId, subreddit) {
   try {
     const { fetchRedditComments } = require('../src/connectors/redditConnector');
     
-    // Fetch the post and its comments
-    const url = `https://www.reddit.com/r/${subreddit}/comments/${postId}.json`;
-    console.log(`Fetching: ${url}`);
+    // Add a delay to avoid triggering rate limits (longer delay in production)
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER;
+    const minDelay = isProduction ? 2000 : 500; // 2s in production, 0.5s locally
+    const maxDelay = isProduction ? 4000 : 1000; // 4s in production, 1s locally
+    const delay = Math.random() * (maxDelay - minDelay) + minDelay;
     
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'CryptoIntelX/1.0.0' }
-    });
+    console.log(`⏱️ Applying ${isProduction ? 'production' : 'development'} delay: ${Math.round(delay)}ms`);
+    await new Promise(resolve => setTimeout(resolve, delay));
     
-    if (!response.ok) {
-      throw new Error(`Reddit API error: ${response.status}`);
+    // Use the proper Reddit connector with retry logic and better headers
+    console.log(`Fetching post and comments: ${postId} from r/${subreddit}`);
+    
+    const redditResponse = await fetchRedditComments(subreddit, postId, 'CryptoIntelX/1.0.0 (crypto-analysis-bot; +https://cryptointelx.com)');
+    
+    if (redditResponse.status !== 200) {
+      throw new Error(`Reddit API error: ${redditResponse.status}`);
     }
     
-    const data = await response.json();
+    if (!redditResponse.json) {
+      throw new Error('Invalid JSON response from Reddit API');
+    }
+    
+    const data = redditResponse.json;
     const post = data[0]?.data?.children[0]?.data;
     
     if (!post) {
