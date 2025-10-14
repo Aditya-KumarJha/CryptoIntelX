@@ -10,7 +10,7 @@ export default function SocialButtons({ onClick }: SocialButtonsProps) {
   const providers = [
     { name: "Google", icon: <FaGoogle /> },
     { name: "GitHub", icon: <FaGithub /> },
-    { name: "Facebook", icon: <FaFacebook /> },
+    { name: "Discord", icon: <FaDiscord /> },
     { name: "LinkedIn", icon: <FaLinkedin /> },
   ];
 
