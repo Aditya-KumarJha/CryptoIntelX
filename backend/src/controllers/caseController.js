@@ -12,6 +12,54 @@ const createCase = async (req, res) => {
   }
 };
 
+// List cases for current user (or all if admin in future)
+const listCases = async (req, res) => {
+  try {
+    const query = {};
+    if (req.user) {
+      query.owner_id = req.user._id;
+    }
+    const cases = await Case.find(query).sort({ updatedAt: -1 }).lean();
+    res.json({ success: true, data: cases });
+  } catch (err) {
+    console.error('List cases error', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// Update case status or notes
+const updateCaseStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, notes } = req.body;
+    const updates = {};
+    if (status) updates.status = status;
+    if (notes !== undefined) updates.notes = notes;
+    updates.updatedAt = new Date();
+    const updated = await Case.findOneAndUpdate({ _id: id, owner_id: req.user ? req.user._id : null }, { $set: updates }, { new: true });
+    if (!updated) return res.status(404).json({ success: false, message: 'Case not found' });
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('Update case error', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// Get single case with derived progress metrics
+const getCase = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doc = await Case.findOne({ _id: id, owner_id: req.user ? req.user._id : null }).lean();
+    if (!doc) return res.status(404).json({ success: false, message: 'Case not found' });
+    // simple progress heuristic: status mapping plus potential future tasks
+    const progress = doc.status === 'closed' ? 100 : doc.status === 'in_progress' ? 60 : 20;
+    res.json({ success: true, data: { ...doc, progress } });
+  } catch (err) {
+    console.error('Get case error', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 const exportSnapshot = async (req, res) => {
   try {
     const { snapshot_ids = [], redaction = true, reason = '' } = req.body;
@@ -139,4 +187,4 @@ const exportSnapshot = async (req, res) => {
   }
 };
 
-module.exports = { createCase, exportSnapshot };
+module.exports = { createCase, listCases, updateCaseStatus, getCase, exportSnapshot };

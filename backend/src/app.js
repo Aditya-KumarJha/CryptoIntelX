@@ -41,6 +41,8 @@ const networkRoutes = require('./routes/networkRoutes');
 app.use('/api/network', networkRoutes);
 const caseRoutes = require('./routes/caseRoutes');
 app.use('/api/cases', caseRoutes);
+const investigationRoutes = require('./routes/investigationRoutes');
+app.use('/api/investigations', investigationRoutes);
 
 // serve generated exports (PDFs)
 app.use('/exports', express.static(path.resolve(__dirname, '..', 'exports')));
