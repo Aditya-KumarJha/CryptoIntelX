@@ -2,6 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
+    // Explicit domains for next/image remote loading
+    domains: [
+      "avatar.vercel.sh",
+      "skiper-ui.com",
+      "i.giphy.com",
+      "media.giphy.com",
+      "media4.giphy.com",
+    ],
     remotePatterns: [
       {
         protocol: "https",
@@ -18,6 +26,10 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "media4.giphy.com",
+      },
+      {
+        protocol: "https",
+        hostname: "avatar.vercel.sh",
       },
     ],
   },

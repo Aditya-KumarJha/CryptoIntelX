@@ -24,11 +24,9 @@ import {
   DollarSign,
   Clock,
   BarChart3,
-  PieChart,
   ArrowUpRight,
   ArrowDownRight,
   MapPin,
-  Users,
   Coins,
   Hexagon
 } from "lucide-react";
@@ -66,42 +64,117 @@ function DashboardContent() {
       router.replace("/login");
       return;
     }
+    
+    const headers = { Authorization: `Bearer ${token}` } as const;
 
-    api
-      .get("/api/users/me", { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => {
-        setUser(res.data);
-        // Simulate real-time crypto intelligence data
-        setStats({
-          totalAddresses: 1247832,
-          flaggedAddresses: 2847,
-          activeCases: 23,
-          riskScore: 76,
-          newThreats: 12,
-          cryptoTypes: [
-            { name: 'Bitcoin', count: 89234, percentage: 67 },
-            { name: 'Ethereum', count: 32847, percentage: 24 },
-            { name: 'Others', count: 12384, percentage: 9 }
-          ],
-          recentActivity: [
-            { time: '2 min ago', type: 'High Risk Address Detected', address: '1A3B...7kL9', risk: 'high' },
-            { time: '8 min ago', type: 'Darknet Mention Found', address: '0x8f2...B4c1', risk: 'medium' },
-            { time: '15 min ago', type: 'Transaction Pattern Alert', address: '3FT2...9mP3', risk: 'high' },
-            { time: '23 min ago', type: 'New Entity Linked', address: 'bc1q...5n8x', risk: 'low' }
-          ],
-          threatCategories: [
-            { category: 'Ransomware', count: 234, trend: 'up' },
-            { category: 'Dark Markets', count: 187, trend: 'down' },
-            { category: 'Money Laundering', count: 156, trend: 'up' },
-            { category: 'Scam Operations', count: 98, trend: 'up' }
-          ]
+    // Helper: pretty time ago
+    const timeAgo = (ts?: string | number | Date) => {
+      if (!ts) return 'just now';
+      const d = new Date(ts).getTime();
+      const diff = Math.max(0, Date.now() - d);
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return `${mins} min ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs} hr${hrs>1?'s':''} ago`;
+      const days = Math.floor(hrs / 24);
+      return `${days} day${days>1?'s':''} ago`;
+    };
+
+    // Load user and dashboard data in parallel
+    (async () => {
+      try {
+        const [meRes, overviewRes, recentRes, categoriesRes, casesRes] = await Promise.all([
+          api.get('/api/users/me', { headers }),
+          api.get('/api/threat/overview', { headers }),
+          api.get('/api/threat/recent?limit=20', { headers }),
+          api.get('/api/threat/categories', { headers }),
+          // api.get('/api/threat/trend?days=14', { headers }),
+          api.get('/api/cases', { headers }).catch(() => ({ data: { data: [] } })),
+        ]);
+
+        setUser(meRes.data);
+
+        const ov = overviewRes.data?.data || {};
+        const recent: Array<{ address:string; coin?:string; risk?:number; lastSeen?:string; category?:string; source?:string }> = recentRes.data?.data || [];
+  const categories: Array<{ name: string; value: number }> = categoriesRes.data?.data || [];
+        const userCases: Array<{ status?: string }> = casesRes.data?.data || [];
+
+        // Active cases = cases not closed
+        const activeCases = userCases.filter(c => (c.status || 'open') !== 'closed').length;
+
+        // Derive crypto type distribution from recent sample by coin
+        const coinCounts = recent.reduce<Record<string, number>>((acc, r) => {
+          const key = (r.coin || 'Other').toLowerCase();
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {});
+        // Map to top groups Bitcoin/Ethereum/Others
+        const btc = (coinCounts['btc'] || coinCounts['bitcoin']) ?? 0;
+        const eth = (coinCounts['eth'] || coinCounts['ethereum']) ?? 0;
+        const totalCoins = Object.values(coinCounts).reduce((a, b) => a + b, 0) || 1;
+        const others = Math.max(0, totalCoins - (btc + eth));
+        const cryptoTypes = [
+          { name: 'Bitcoin', count: btc, percentage: Math.round((btc / totalCoins) * 100) },
+          { name: 'Ethereum', count: eth, percentage: Math.round((eth / totalCoins) * 100) },
+          { name: 'Others', count: others, percentage: Math.max(0, 100 - (Math.round((btc / totalCoins) * 100) + Math.round((eth / totalCoins) * 100))) },
+        ];
+
+        // Recent activity mapping
+        const recentActivity: DashboardStats['recentActivity'] = recent.slice(0, 10).map((r) => {
+          const riskLevel: 'high' | 'medium' | 'low' = (r.risk ?? 0) >= 80 ? 'high' : (r.risk ?? 0) >= 50 ? 'medium' : 'low';
+          const addr = r.address || '';
+          return {
+            time: timeAgo(r.lastSeen || Date.now()),
+            type: r.category ? `${r.category} detection` : (r.source ? `${r.source} detection` : 'New detection'),
+            address: addr.length > 10 ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : addr,
+            risk: riskLevel,
+          };
         });
-      })
-      .catch(() => {
-        localStorage.removeItem("authToken");
-        router.replace("/login?error=session_expired");
-      })
-      .finally(() => setLoading(false));
+
+        // Threat categories with a simple up/down heuristic (above median = up)
+        const median = (() => {
+          const vals = categories.map(c => c.value).sort((a, b) => a - b);
+          if (vals.length === 0) return 0;
+          const mid = Math.floor(vals.length / 2);
+          return vals.length % 2 ? vals[mid] : Math.round((vals[mid - 1] + vals[mid]) / 2);
+        })();
+        const threatCategories = categories.slice(0, 6).map(c => ({
+          category: c.name,
+          count: c.value,
+          trend: c.value >= median ? 'up' as const : 'down' as const,
+        }));
+
+        // Risk score: combine high-risk ratio and activity in last 24h
+        const total = ov.totalAddresses || 0;
+        const high = ov.highRiskCount || 0;
+        const last24 = ov.last24hExtractions || 0;
+        const highRatio = total > 0 ? high / total : 0;
+        const baseScore = Math.min(80, Math.round(highRatio * 80));
+        const activityBoost = Math.min(20, Math.round(Math.min(last24 / 500, 1) * 20));
+        const riskScore = Math.min(100, baseScore + activityBoost);
+
+        // New threats today approximated by last 24h extractions
+        const newThreats = last24;
+
+        setStats({
+          totalAddresses: total,
+          flaggedAddresses: high,
+          activeCases,
+          riskScore,
+          newThreats,
+          cryptoTypes,
+          recentActivity,
+          threatCategories,
+        });
+  } catch {
+        // Auth failure or API error => redirect to login
+        localStorage.removeItem('authToken');
+        router.replace('/login?error=session_expired');
+      } finally {
+        setLoading(false);
+      }
+    })();
     
   }, [router]);
 

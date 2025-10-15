@@ -10,8 +10,8 @@ class Scheduler {
   start() {
     if (this.isRunning) return;
     
-    // Run paginated scrape every hour at minute 0
-    const job = cron.schedule('0 * * * *', async () => {
+    // Run paginated scrape every 5 minutes
+    const job = cron.schedule('*/5 * * * *', async () => {
       console.log('Auto-scraper starting at', new Date().toISOString());
       try {
         await this.runPaginatedScrape();
@@ -23,7 +23,7 @@ class Scheduler {
     this.jobs.set('reddit-scraper', job);
     job.start();
     this.isRunning = true;
-    console.log('Scheduler started - will run every hour');
+    console.log('Scheduler started - will run every 5 minutes');
   }
 
   stop() {
@@ -78,7 +78,7 @@ class Scheduler {
     return {
       running: this.isRunning,
       jobs: Array.from(this.jobs.keys()),
-      nextRun: this.isRunning ? 'Next hour at :00 minutes' : 'Not scheduled'
+      nextRun: this.isRunning ? 'Every 5 minutes' : 'Not scheduled'
     };
   }
 }

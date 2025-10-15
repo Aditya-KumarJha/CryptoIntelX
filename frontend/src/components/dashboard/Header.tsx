@@ -1,14 +1,42 @@
 "use client";
 
-import { Bell, Search, Shield, Zap, Globe, ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { Bell, Search, Zap, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import type { AxiosInstance } from "axios";
+import api from "@/utils/axios";
 
-interface HeaderProps {
-  user: any;
-}
+interface BasicUser { _id?: string; fullName?: { firstName?: string; lastName?: string }; role?: string; profilePic?: string }
+interface HeaderProps { user: BasicUser | null }
 
 export default function Header({ user }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [alerts, setAlerts] = useState<Array<{id:string; address:string; coin:string; risk:number; source?:string; ts:number}>>([]);
+  const [open, setOpen] = useState(false);
+  const sseRef = useRef<EventSource | null>(null);
+  const backendBase = useMemo(()=> {
+    // Use axios baseURL if set, else fallback to same-origin
+    const u = (api as unknown as AxiosInstance).defaults?.baseURL as string | undefined;
+    if (u) return u.replace(/\/$/, '');
+    if (typeof window !== 'undefined') return window.location.origin;
+    return '';
+  }, []);
+
+  useEffect(() => {
+    if (!backendBase) return;
+  const url = `${backendBase}/api/stream/notifications`;
+  const es = new EventSource(url, { withCredentials: true });
+    sseRef.current = es;
+    const onDetection = (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data);
+        setAlerts(prev => [payload, ...prev].slice(0, 20));
+      } catch { /* ignore */ }
+    };
+    es.addEventListener('detection', onDetection);
+    // clean up
+    return () => { es.close(); sseRef.current = null; };
+  }, [backendBase]);
   
   return (
     <header className="flex items-center justify-between mb-8 bg-gray-800/30 backdrop-blur-sm rounded-2xl p-4 border border-gray-700/50">
@@ -73,19 +101,46 @@ export default function Header({ user }: HeaderProps) {
         </div>
 
         {/* Notifications */}
-        <button className="relative p-2 bg-gray-800/50 hover:bg-gray-700/50 rounded-xl transition-colors group">
-          <Bell className="h-5 w-5 text-gray-400 group-hover:text-white" />
-          <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
-            <span className="text-xs text-white font-semibold">3</span>
-          </div>
-        </button>
+        <div className="relative">
+          <button onClick={()=>setOpen(o=>!o)} className="relative p-2 bg-gray-800/50 hover:bg-gray-700/50 rounded-xl transition-colors group">
+            <Bell className="h-5 w-5 text-gray-400 group-hover:text-white" />
+            {alerts.length > 0 && (
+              <div className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 bg-red-500 rounded-full flex items-center justify-center">
+                <span className="text-xs text-white font-semibold">{Math.min(alerts.length,99)}</span>
+              </div>
+            )}
+          </button>
+          {open && (
+            <div className="absolute right-0 mt-2 w-96 max-w-[90vw] bg-gray-900 border border-gray-700/60 rounded-xl shadow-xl overflow-hidden z-50">
+              <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+                <span className="text-sm text-gray-300">Live Detections</span>
+                <button className="text-xs text-cyan-400 hover:underline" onClick={()=>setAlerts([])}>Clear</button>
+              </div>
+              <ul className="max-h-96 overflow-y-auto">
+                {alerts.length === 0 && <li className="p-4 text-sm text-gray-500">No new alerts</li>}
+                {alerts.map(a => (
+                  <li key={a.id} className="px-4 py-3 border-b border-gray-800 last:border-b-0 hover:bg-gray-800/50">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-gray-400">{new Date(a.ts).toLocaleTimeString()} • {a.source || 'crawler'}</div>
+                      <div className={`text-xs font-semibold ${a.risk>=80?'text-red-400':a.risk>=50?'text-yellow-400':'text-green-400'}`}>risk {a.risk}</div>
+                    </div>
+                    <div className="text-sm font-mono truncate text-cyan-300">{a.address}</div>
+                    <div className="text-xs text-gray-400">{a.coin}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
 
         {/* User Menu */}
         <div className="flex items-center space-x-3 bg-gray-800/50 rounded-xl px-3 py-2 hover:bg-gray-700/50 transition-colors cursor-pointer group">
-          <img
+          <Image
             src={user?.profilePic || `https://avatar.vercel.sh/${user?._id}.png`}
             alt="Profile"
-            className="w-8 h-8 rounded-full border-2 border-gray-600"
+            width={32}
+            height={32}
+            className="rounded-full border-2 border-gray-600"
           />
           <div className="hidden md:block">
             <div className="text-white text-sm font-medium">

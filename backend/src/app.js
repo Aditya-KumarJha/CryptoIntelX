@@ -46,6 +46,17 @@ app.use('/api/investigations', investigationRoutes);
 
 // serve generated exports (PDFs)
 app.use('/exports', express.static(path.resolve(__dirname, '..', 'exports')));
+// SSE notifications stream
+const { addClient, sendEvent } = require('./services/notificationService');
+app.get('/api/stream/notifications', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders && res.flushHeaders();
+  // initial hello so client knows we’re live
+  sendEvent(res, 'ready', { t: Date.now() });
+  addClient(res);
+});
 
 const workerRoutes = require('./routes/workerRoutes');
 app.use('/workers', workerRoutes);

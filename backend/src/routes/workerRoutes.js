@@ -11,6 +11,7 @@ connection.on('error', () => { redisAvailable = false; });
 connection.ping().then(() => { redditQueue = new Queue('reddit', { connection }); redisAvailable = true; }).catch(() => { redisAvailable = false; });
 
 const router = express.Router();
+const { publishDetection } = require('../services/notificationService');
 
 router.post('/scrape/reddit', async (req, res) => {
   const { subreddit, mode, limit } = req.body;
@@ -30,3 +31,17 @@ router.post('/scrape/reddit', async (req, res) => {
 });
 
 module.exports = router;
+
+// Test endpoint: push a fake detection to all SSE clients
+router.post('/test-detection', (req, res) => {
+  const sample = {
+    id: Date.now().toString(36),
+    address: req.body?.address || ('0x' + Math.random().toString(16).slice(2).padEnd(40,'0').slice(0,40)),
+    coin: req.body?.coin || 'ethereum',
+    risk: req.body?.risk ?? Math.floor(Math.random()*100),
+    source: req.body?.source || 'crawler',
+    ts: Date.now()
+  };
+  publishDetection(sample);
+  res.json({ success: true, data: sample });
+});
